@@ -31,58 +31,65 @@ import de.siteof.task.ITaskManager;
 import de.siteof.task.SingleThreadTaskManager;
 
 public abstract class AbstractNettyResourceClient<T> {
-	
+
 	private static final Log log = LogFactory.getLog(AbstractNettyResourceClient.class);
 
 	private static ITaskManager redirectTaskManager = new SingleThreadTaskManager();
 
 	private final IResourceListener<ResourceLoaderEvent<T>> listener;
-	private final AtomicReference<String> redirectUrlHolder = new AtomicReference<String>(); 
-	private final AtomicBoolean done = new AtomicBoolean(); 
-	
+	private final AtomicReference<String> redirectUrlHolder = new AtomicReference<String>();
+	private final AtomicBoolean done = new AtomicBoolean();
+
 	protected AbstractNettyResourceClient(IResourceListener<ResourceLoaderEvent<T>> listener) {
 		this.listener = createProxyListener(listener);
 	}
-	
+
 	private IResourceListener<ResourceLoaderEvent<T>> createProxyListener(
 			final IResourceListener<ResourceLoaderEvent<T>> listener) {
 		return new IResourceListener<ResourceLoaderEvent<T>>() {
 			@Override
 			public void onResourceEvent(ResourceLoaderEvent<T> event) {
-				log.info("event=" + event);
+				if (log.isDebugEnabled()) {
+					log.debug("event=" + event);
+				}
 				if (event instanceof RedirectResourceLoaderEvent) {
 					String redirectUrl = ((RedirectResourceLoaderEvent<?>) event).getRedirectUrl();
 					redirectUrlHolder.set(redirectUrl);
 				} else {
 					if (redirectUrlHolder.get() == null) {
 						if ((event.isComplete()) || (event.isFailed())) {
-							done.set(true);
+							if (done.compareAndSet(false, true)) {
+								listener.onResourceEvent(event);
+							} else {
+								log.warn("response already complete, but received event=" + event);
+							}
+						} else {
+							listener.onResourceEvent(event);
 						}
-						listener.onResourceEvent(event);
 					}
 				}
 			}
 		};
 	}
-	
+
 	private void error(IResource resource, Throwable e) {
 		if (!done.compareAndSet(false, true)) {
 			listener.onResourceEvent(new ResourceLoaderEvent<T>(resource, e));
 		}
 	}
-	
+
 	protected abstract ResourceLoaderEvent<T> getCompleteEvent(IResource resource);
-	
+
 	private void complete(IResource resource) {
 		if (!done.compareAndSet(false, true)) {
 			listener.onResourceEvent(this.getCompleteEvent(resource));
 		}
 	}
-	
+
 	public void execute(IResource resource) {
 		execute(resource, resource.getName(), 0);
 	}
-	
+
 	private void execute(IResource resource, String url, int redirectCount) {
 		try {
 			execute(resource, new URI(url), redirectCount);
@@ -122,16 +129,16 @@ public abstract class AbstractNettyResourceClient<T> {
 			protected ChannelHandler createChannelHandler() {
 				return AbstractNettyResourceClient.this.createChannelHandler(
 						resource, listener);
-			}			
+			}
 		});
-		
+
 		// Start the connection attempt.
 		ChannelFuture future = bootstrap.connect(new InetSocketAddress(host,
 				port));
 //			notifyDownloadStart();
 
 		future.addListener(new ChannelFutureListener() {
-			
+
 			@Override
 			public void operationComplete(ChannelFuture future) throws Exception {
 				if (future.isDone()) {
@@ -141,7 +148,7 @@ public abstract class AbstractNettyResourceClient<T> {
 						error(resource, e);
 					} else {
 						Channel channel = future.getChannel();
-						
+
 						// Prepare the HTTP request.
 						HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1,
 								HttpMethod.GET, uri.toASCIIString());
@@ -159,18 +166,18 @@ public abstract class AbstractNettyResourceClient<T> {
 
 						// Send the HTTP request.
 						channel.write(request);
-						
+
 						// Wait for the server to close the connection.
-						channel.getCloseFuture().addListener(new ChannelFutureListener() {							
+						channel.getCloseFuture().addListener(new ChannelFutureListener() {
 							@Override
-							public void operationComplete(ChannelFuture future) throws Exception {								
+							public void operationComplete(ChannelFuture future) throws Exception {
 									final String redirectUrl = redirectUrlHolder.getAndSet(null);
 									if (redirectUrl != null) {
 										if (redirectCount >= 10) {
 											log.error("maximum redirects reached");
 											error(resource, new IOException("maximum redirects reached"));
 										} else {
-											redirectTaskManager.addTask(new AbstractTask() {			
+											redirectTaskManager.addTask(new AbstractTask() {
 												@Override
 												public void execute() throws Exception {
 													AbstractNettyResourceClient.this.execute(
@@ -187,8 +194,6 @@ public abstract class AbstractNettyResourceClient<T> {
 				}
 			}
 		});
-
-		
 	}
 
 }
