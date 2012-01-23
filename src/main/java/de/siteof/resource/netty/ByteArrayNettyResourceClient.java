@@ -7,6 +7,7 @@ import org.apache.commons.logging.LogFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandler;
 
+import de.siteof.resource.ICookieManager;
 import de.siteof.resource.IResource;
 import de.siteof.resource.event.IResourceListener;
 import de.siteof.resource.event.ResourceLoaderEvent;
@@ -48,8 +49,9 @@ public class ByteArrayNettyResourceClient extends
 	private final AtomicLong dataReceived = new AtomicLong();
 
 	protected ByteArrayNettyResourceClient(
+			ICookieManager cookieManager,
 			IResourceListener<ResourceLoaderEvent<byte[]>> listener) {
-		super(listener);
+		super(cookieManager, listener);
 	}
 
 	@Override

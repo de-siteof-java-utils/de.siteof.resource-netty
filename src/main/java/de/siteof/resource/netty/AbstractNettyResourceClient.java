@@ -14,13 +14,13 @@ import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelHandler;
-import org.jboss.netty.handler.codec.http.CookieEncoder;
 import org.jboss.netty.handler.codec.http.DefaultHttpRequest;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpMethod;
 import org.jboss.netty.handler.codec.http.HttpRequest;
 import org.jboss.netty.handler.codec.http.HttpVersion;
 
+import de.siteof.resource.ICookieManager;
 import de.siteof.resource.IResource;
 import de.siteof.resource.event.IResourceListener;
 import de.siteof.resource.event.RedirectResourceLoaderEvent;
@@ -36,11 +36,15 @@ public abstract class AbstractNettyResourceClient<T> {
 
 	private static ITaskManager redirectTaskManager = new SingleThreadTaskManager();
 
+	private final ICookieManager cookieManager;
 	private final IResourceListener<ResourceLoaderEvent<T>> listener;
 	private final AtomicReference<String> redirectUrlHolder = new AtomicReference<String>();
 	private final AtomicBoolean done = new AtomicBoolean();
 
-	protected AbstractNettyResourceClient(IResourceListener<ResourceLoaderEvent<T>> listener) {
+	protected AbstractNettyResourceClient(
+			ICookieManager cookieManager,
+			IResourceListener<ResourceLoaderEvent<T>> listener) {
+		this.cookieManager = cookieManager;
 		this.listener = createProxyListener(listener);
 	}
 
@@ -101,6 +105,21 @@ public abstract class AbstractNettyResourceClient<T> {
 	protected abstract ChannelHandler createChannelHandler(IResource resource,
 			IResourceListener<ResourceLoaderEvent<T>> listener);
 
+	private void addCookies(String url, HttpRequest request) {
+		if (this.cookieManager != null) {
+			String[] cookies = this.cookieManager.getCookiesForName(url);
+			if (cookies != null) {
+				for (int i = 0; i < cookies.length; i++) {
+					request.addHeader("Cookie", cookies[i]);
+				}
+			}
+		}
+//		CookieEncoder httpCookieEncoder = new CookieEncoder(false);
+//		httpCookieEncoder.addCookie("my-cookie", "foo");
+//		httpCookieEncoder.addCookie("another-cookie", "bar");
+//		request.setHeader(HttpHeaders.Names.COOKIE, httpCookieEncoder.encode());
+	}
+
 	private void execute(final IResource resource, final URI uri, final int redirectCount) {
 		String scheme = uri.getScheme() == null ? "http" : uri.getScheme();
 		final String host = uri.getHost() == null ? "localhost" : uri.getHost();
@@ -159,10 +178,7 @@ public abstract class AbstractNettyResourceClient<T> {
 								HttpHeaders.Values.GZIP);
 
 						// Set some example cookies.
-						CookieEncoder httpCookieEncoder = new CookieEncoder(false);
-						httpCookieEncoder.addCookie("my-cookie", "foo");
-						httpCookieEncoder.addCookie("another-cookie", "bar");
-						request.setHeader(HttpHeaders.Names.COOKIE, httpCookieEncoder.encode());
+						addCookies(uri.toASCIIString(), request);
 
 						// Send the HTTP request.
 						channel.write(request);
