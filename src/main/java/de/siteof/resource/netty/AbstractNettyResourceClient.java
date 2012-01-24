@@ -14,6 +14,7 @@ import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
 import org.jboss.netty.channel.ChannelFutureListener;
 import org.jboss.netty.channel.ChannelHandler;
+import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.handler.codec.http.DefaultHttpRequest;
 import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpMethod;
@@ -87,6 +88,15 @@ public abstract class AbstractNettyResourceClient<T> {
 	private void complete(IResource resource) {
 		if (!done.compareAndSet(false, true)) {
 			listener.onResourceEvent(this.getCompleteEvent(resource));
+		}
+	}
+
+	protected void cancel(ChannelHandlerContext context) {
+		if (context != null) {
+			Channel channel = context.getChannel();
+			if (channel != null) {
+				channel.close();
+			}
 		}
 	}
 

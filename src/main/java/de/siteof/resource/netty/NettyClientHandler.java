@@ -1,5 +1,7 @@
 package de.siteof.resource.netty;
 
+import java.util.concurrent.atomic.AtomicLong;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -26,6 +28,8 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 	private final IResource resource;
 	private final IResourceListener<ResourceLoaderEvent<T>> listener;
 	private boolean redirect;
+
+	private final AtomicLong dataReceived = new AtomicLong();
 
 	public NettyClientHandler(IResource resource,
 			IResourceListener<ResourceLoaderEvent<T>> listener) {
@@ -56,9 +60,21 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 				cleanFilename(filename)));
 	}
 
-	protected abstract void contentReceived(ChannelBuffer content, boolean complete);
+	protected abstract void contentReceived(ChannelHandlerContext context,
+			ChannelBuffer content, boolean complete);
 
 	protected abstract void contentComplete();
+
+	protected byte[] getContentBytes(ChannelBuffer content, boolean complete) {
+		int readableBytes = content.readableBytes();
+		byte[] data = content.array();
+		long total = dataReceived.addAndGet(data.length);
+		if (log.isDebugEnabled()) {
+			log.debug("data.length=" + data.length + ", readableBytes=" + readableBytes +
+					", total=" + total + ", complete=" + complete);
+		}
+		return data;
+	}
 
 	private String getHeader(HttpResponse response, String name) {
 		String result = response.getHeader(name);
@@ -83,7 +99,7 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 	}
 
 	@Override
-	public void messageReceived(ChannelHandlerContext ctx, MessageEvent e)
+	public void messageReceived(ChannelHandlerContext context, MessageEvent e)
 			throws Exception {
 		if (!readingChunks) {
 			HttpResponse response = (HttpResponse) e.getMessage();
@@ -147,7 +163,7 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 								"\n]");
 					}
 					if (!redirect) {
-						contentReceived(content, true);
+						contentReceived(context, content, true);
 					}
 				}
 			}
@@ -167,7 +183,7 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 				}
 				if (!redirect) {
 					ChannelBuffer content = chunk.getContent();
-					contentReceived(content, false);
+					contentReceived(context, content, false);
 				}
 			}
 		}

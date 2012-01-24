@@ -1,11 +1,10 @@
 package de.siteof.resource.netty;
 
-import java.util.concurrent.atomic.AtomicLong;
-
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelHandler;
+import org.jboss.netty.channel.ChannelHandlerContext;
 
 import de.siteof.resource.ICookieManager;
 import de.siteof.resource.IResource;
@@ -23,14 +22,9 @@ public class ByteArrayNettyResourceClient extends
 		}
 
 		@Override
-		protected void contentReceived(ChannelBuffer content, boolean complete) {
-			int readableBytes = content.readableBytes();
-			byte[] data = content.array();
-			long total = dataReceived.addAndGet(data.length);
-			if (log.isDebugEnabled()) {
-				log.debug("data.length=" + data.length + ", readableBytes=" + readableBytes +
-						", total=" + total + ", complete=" + complete);
-			}
+		protected void contentReceived(ChannelHandlerContext context,
+				ChannelBuffer content, boolean complete) {
+			byte[] data = getContentBytes(content, complete);
 			fireResourceEvent(new ResourceLoaderEvent<byte[]>(this.getResource(),
 					data, complete));
 		}
@@ -45,8 +39,6 @@ public class ByteArrayNettyResourceClient extends
 	}
 
 	private static final Log log = LogFactory.getLog(ByteArrayNettyResourceClient.class);
-
-	private final AtomicLong dataReceived = new AtomicLong();
 
 	protected ByteArrayNettyResourceClient(
 			ICookieManager cookieManager,
