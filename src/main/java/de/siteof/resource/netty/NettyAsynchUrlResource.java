@@ -12,6 +12,7 @@ import org.apache.commons.logging.LogFactory;
 
 import de.siteof.resource.AbstractResource;
 import de.siteof.resource.ICookieManager;
+import de.siteof.resource.ResourceRequestParameters;
 import de.siteof.resource.event.IResourceListener;
 import de.siteof.resource.event.ResourceLoaderEvent;
 import de.siteof.task.ITaskManager;
@@ -47,7 +48,8 @@ public class NettyAsynchUrlResource extends AbstractResource {
 
 	@Override
 	public void getResourceAsStream(
-			IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+			IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		InputStreamNettyResourceClient client = new InputStreamNettyResourceClient(
 				this.getTaskManager(), cookieManager, listener);
@@ -56,7 +58,8 @@ public class NettyAsynchUrlResource extends AbstractResource {
 
 	@Override
 	public void getResourceBytes(
-			final IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+			final IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		ByteArrayNettyResourceClient client = new ByteArrayNettyResourceClient(
 				cookieManager, listener);
