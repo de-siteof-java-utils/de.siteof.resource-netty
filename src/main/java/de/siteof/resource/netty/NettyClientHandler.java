@@ -10,13 +10,16 @@ import org.jboss.netty.channel.ChannelHandlerContext;
 import org.jboss.netty.channel.MessageEvent;
 import org.jboss.netty.channel.SimpleChannelUpstreamHandler;
 import org.jboss.netty.handler.codec.http.HttpChunk;
+import org.jboss.netty.handler.codec.http.HttpHeaders;
 import org.jboss.netty.handler.codec.http.HttpResponse;
 import org.jboss.netty.handler.codec.http.HttpResponseStatus;
 import org.jboss.netty.util.CharsetUtil;
 
 import de.siteof.resource.IResource;
+import de.siteof.resource.IResourceMetaData;
+import de.siteof.resource.ResourceMetaData;
 import de.siteof.resource.event.IResourceListener;
-import de.siteof.resource.event.NameResourceLoaderEvent;
+import de.siteof.resource.event.MetaResourceLoaderEvent;
 import de.siteof.resource.event.RedirectResourceLoaderEvent;
 import de.siteof.resource.event.ResourceLoaderEvent;
 
@@ -55,9 +58,9 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 		return s;
 	}
 
-	protected void onFilename(String filename) {
-		fireResourceEvent(new NameResourceLoaderEvent<T>(resource,
-				cleanFilename(filename)));
+	protected void onMetaData(IResourceMetaData metaData) {
+		fireResourceEvent(new MetaResourceLoaderEvent<T>(resource,
+				metaData));
 	}
 
 	protected abstract void contentReceived(ChannelHandlerContext context,
@@ -119,6 +122,10 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 				}
 			}
 
+			ResourceMetaData metaData = new ResourceMetaData();
+			metaData.setLength(HttpHeaders.getContentLength(response));
+			metaData.setContentType(HttpHeaders.getHeader(response, "Content-Type"));
+
 			HttpResponseStatus status = response.getStatus();
 			if ((HttpResponseStatus.MOVED_PERMANENTLY.equals(status)) ||
 					(HttpResponseStatus.FOUND.equals(status))) {
@@ -142,7 +149,7 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 								if ("filename".equalsIgnoreCase(parameterName)) {
 									parameterValue = stripQuotes(parameterValue);
 									if (!parameterValue.isEmpty()) {
-										onFilename(parameterValue);
+										metaData.setName(cleanFilename(parameterValue));
 									}
 								}
 							}
@@ -150,6 +157,8 @@ public abstract class NettyClientHandler<T> extends SimpleChannelUpstreamHandler
 					}
 				}
 			}
+
+			onMetaData(metaData);
 
 			if (response.isChunked()) {
 				readingChunks = true;

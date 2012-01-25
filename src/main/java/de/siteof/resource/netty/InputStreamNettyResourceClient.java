@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.commons.logging.Log;
@@ -17,6 +18,7 @@ import org.jboss.netty.channel.ChannelHandlerContext;
 
 import de.siteof.resource.ICookieManager;
 import de.siteof.resource.IResource;
+import de.siteof.resource.IResourceMetaData;
 import de.siteof.resource.event.IResourceListener;
 import de.siteof.resource.event.ResourceLoaderEvent;
 import de.siteof.task.AbstractTask;
@@ -29,6 +31,9 @@ public class InputStreamNettyResourceClient extends
 
 		private final AtomicReference<InputStream> in = new AtomicReference<InputStream>();
 		private final AtomicReference<OutputStream> out = new AtomicReference<OutputStream>();
+
+		private long contentLength;
+		private final AtomicLong bytesRead = new AtomicLong();
 
 		public ByteArrayNettyClientHandler(IResource resource,
 				IResourceListener<ResourceLoaderEvent<InputStream>> listener) {
@@ -59,7 +64,8 @@ public class InputStreamNettyResourceClient extends
 
 									@Override
 									public int available() throws IOException {
-										return 0;
+										return Math.max(0,
+												(int) (Math.min(Integer.MAX_VALUE, contentLength - bytesRead.get())));
 									}
 
 									@Override
@@ -74,6 +80,42 @@ public class InputStreamNettyResourceClient extends
 										} catch (Exception e) {
 											log.debug("failed to cancel connection - " + e, e);
 										}
+									}
+
+									@Override
+									public int read() throws IOException {
+										int result = super.read();
+										if (result >= 0) {
+											bytesRead.addAndGet(1);
+										}
+										return result;
+									}
+
+									@Override
+									public int read(byte[] b)
+											throws IOException {
+										int result = super.read(b);
+										if (result > 0) {
+											bytesRead.addAndGet(result);
+										}
+										return result;
+									}
+
+									@Override
+									public int read(byte[] b, int off, int len)
+											throws IOException {
+										int result = super.read(b, off, len);
+										if (result > 0) {
+											bytesRead.addAndGet(result);
+										}
+										return result;
+									}
+
+									@Override
+									public long skip(long n) throws IOException {
+										long result = super.skip(n);
+										bytesRead.addAndGet(result);
+										return result;
 									}
 								};
 								ByteArrayNettyClientHandler.this.in.set(in);
@@ -121,6 +163,12 @@ public class InputStreamNettyResourceClient extends
 					log.error("close failed", e);
 				}
 			}
+		}
+
+		@Override
+		protected void onMetaData(IResourceMetaData metaData) {
+			contentLength = metaData.getLength();
+			super.onMetaData(metaData);
 		}
 
 	}
