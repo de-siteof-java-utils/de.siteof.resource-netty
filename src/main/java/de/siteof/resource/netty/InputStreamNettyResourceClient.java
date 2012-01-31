@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.PipedInputStream;
 import java.io.PipedOutputStream;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -54,7 +55,7 @@ public class InputStreamNettyResourceClient extends
 					} else {
 						final PipedOutputStream out = new PipedOutputStream();
 						this.out.set(out);
-						final Object inputCreatedLock = new Object();
+						final CountDownLatch inputCreatedLock = new CountDownLatch(1);
 
 						taskManager.addTask(new AbstractTask() {
 							@Override
@@ -119,9 +120,7 @@ public class InputStreamNettyResourceClient extends
 									}
 								};
 								ByteArrayNettyClientHandler.this.in.set(in);
-								synchronized (inputCreatedLock) {
-									inputCreatedLock.notify();
-								}
+								inputCreatedLock.countDown();
 								fireResourceEvent(new ResourceLoaderEvent<InputStream>(
 										ByteArrayNettyClientHandler.this.getResource(),
 										in, true));
@@ -129,9 +128,7 @@ public class InputStreamNettyResourceClient extends
 						});
 
 						// wait until the input stream is created
-						synchronized (inputCreatedLock) {
-							inputCreatedLock.wait();
-						}
+						inputCreatedLock.await();
 
 						out.write(data);
 					}
