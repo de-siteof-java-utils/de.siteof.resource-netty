@@ -169,4 +169,17 @@ public class NettyDownloadTest extends AbstractResourceDownloaderTest {
 		doTestResourceLoaderStream(resourceLoader, parameters);
 	}
 
+	@Test
+	public void testResourceDownloaderNettyWithoutFilenameButTitle() throws Exception {
+		TestDownloadParameters parameters = getTestParameters();
+		parameters.filename = null;
+		parameters.contentType = "video/mp4";
+		parameters.title = "My file";
+		setServletResponse(parameters);
+
+		IResourceLoader resourceLoader = getNettyResourceLoader();
+
+		doTestResourceDownloaderFile(resourceLoader, parameters, parameters.title + ".mp4");
+	}
+
 }
